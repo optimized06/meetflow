@@ -11,6 +11,7 @@ export interface Meeting {
   title: string;
   createdAt: string;
   createdBy: string;
+  lastJoinedAt?: string;
   status: 'active' | 'ended';
 }
 
@@ -34,6 +35,7 @@ export interface ChatMessage {
 export interface Participant {
   peerId: string;
   displayName: string;
+  avatarUrl?: string;
   stream: MediaStream | null;
   isMicOn: boolean;
   isCameraOn: boolean;

@@ -1,21 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Plus, Video, Calendar, Copy, Check, Clock, ExternalLink, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import type { Meeting } from '../types';
 
-// Mock data for initial UI dev
-const MOCK_MEETINGS: Meeting[] = [
-  { id: '1', roomId: 'standup-daily', title: 'Daily Standup', createdAt: new Date().toISOString(), createdBy: '1', status: 'active' },
-  { id: '2', roomId: 'design-sync-123', title: 'Design Sync', createdAt: new Date(Date.now() - 86400000).toISOString(), createdBy: '1', status: 'ended' },
-];
+// Removed static mock data
 
 const DashboardPage: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [joinRoomId, setJoinRoomId] = useState('');
-  const [meetings, setMeetings] = useState<Meeting[]>(MOCK_MEETINGS);
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   
   // Modal state
@@ -35,26 +32,63 @@ const DashboardPage: React.FC = () => {
     'https://api.dicebear.com/7.x/avataaars/svg?seed=Oliver'
   ];
 
+  useEffect(() => {
+    const fetchMeetings = async () => {
+      try {
+        setIsLoading(true);
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+        const res = await fetch(`${apiUrl}/api/meetings`, {
+          headers: {
+            'x-mock-user-id': user?.id || ''
+          }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setMeetings(data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch meetings', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    if (user?.id) fetchMeetings();
+  }, [user?.id]);
+
   const handleSelectAvatar = (url: string) => {
     setAvatar(url);
     localStorage.setItem('user_avatar', url);
     setShowAvatarModal(false);
   };
 
-  const handleCreateMeeting = () => {
-    const newRoomId = Math.random().toString(36).substring(2, 10) + '-' + Math.random().toString(36).substring(2, 6);
-    const newMeeting: Meeting = {
-      id: Math.random().toString(),
-      roomId: newRoomId,
-      title: 'Instant Meeting',
-      createdAt: new Date().toISOString(),
-      createdBy: user?.id || 'unknown',
-      status: 'active'
-    };
-    
-    setMeetings([newMeeting, ...meetings]);
-    setNewMeetingInfo({ roomId: newRoomId, title: newMeeting.title });
-    setShowModal(true);
+  const handleCreateMeeting = async () => {
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+      const res = await fetch(`${apiUrl}/api/meetings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-mock-user-id': user?.id || ''
+        },
+        body: JSON.stringify({ title: 'Instant Meeting' })
+      });
+      if (res.ok) {
+        const newMeeting = await res.json();
+        const meetingObj: Meeting = {
+          id: newMeeting.id,
+          roomId: newMeeting.roomId,
+          title: newMeeting.title,
+          createdAt: newMeeting.createdAt,
+          createdBy: user?.id || 'unknown',
+          status: 'active'
+        };
+        setMeetings([meetingObj, ...meetings]);
+        setNewMeetingInfo({ roomId: newMeeting.roomId, title: newMeeting.title });
+        setShowModal(true);
+      }
+    } catch (err) {
+      console.error('Failed to create meeting', err);
+    }
   };
 
   const handleJoinMeeting = (e: React.FormEvent) => {
@@ -71,14 +105,14 @@ const DashboardPage: React.FC = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+    <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-10">
       
       {/* Header section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-12 gap-6">
         <div className="flex items-center gap-6">
           <button 
             onClick={() => setShowAvatarModal(true)}
-            className="w-16 h-16 rounded-full overflow-hidden border-2 border-white/10 hover:border-white/30 transition-colors shadow-2xl shrink-0 bg-surface-light relative group"
+            className="w-12 h-12 sm:w-16 sm:h-16 rounded-full overflow-hidden border-2 border-white/10 hover:border-white/30 transition-colors shadow-2xl shrink-0 bg-surface-light relative group"
           >
             <img src={avatar} alt="Avatar" className="w-full h-full object-cover" />
             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
@@ -86,11 +120,11 @@ const DashboardPage: React.FC = () => {
             </div>
           </button>
           <div>
-            <h1 className="text-3xl font-bold text-white mb-1 tracking-tight">Welcome back, {user?.name?.split(' ')[0]}</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-white mb-1 tracking-tight">Welcome back, {user?.name?.split(' ')[0]}</h1>
             <p className="text-slate-400 text-sm">Manage your meetings and connect with your team.</p>
           </div>
         </div>
-        <div className="flex items-center space-x-3 bg-white/[0.03] border border-white/[0.05] rounded-full px-5 py-2.5 backdrop-blur-md">
+        <div className="hidden sm:flex items-center space-x-3 bg-white/[0.03] border border-white/[0.05] rounded-full px-5 py-2.5 backdrop-blur-md">
           <div className="text-sm font-medium text-slate-300">
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           </div>
@@ -191,10 +225,10 @@ const DashboardPage: React.FC = () => {
                             )}
                           </div>
                           <p className="text-sm text-slate-400 mt-1 flex items-center">
-                            ID: <span className="font-mono ml-1">{meeting.roomId}</span>
+                            ID: <span className="font-mono ml-1 truncate max-w-[120px] sm:max-w-none">{meeting.roomId}</span>
                           </p>
                           <p className="text-xs text-slate-500 mt-1">
-                            {new Date(meeting.createdAt).toLocaleString()}
+                            {meeting.lastJoinedAt ? `Joined: ${new Date(meeting.lastJoinedAt).toLocaleString()}` : `Created: ${new Date(meeting.createdAt).toLocaleString()}`}
                           </p>
                         </div>
                       </div>
@@ -221,10 +255,21 @@ const DashboardPage: React.FC = () => {
                     </li>
                   ))}
                 </ul>
-              ) : (
+              ) : isLoading ? (
                 <div className="h-64 flex flex-col items-center justify-center text-slate-500">
+                  <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mb-4" />
+                  <p>Loading your history...</p>
+                </div>
+              ) : (
+                <div className="h-64 flex flex-col items-center justify-center text-slate-500 text-center">
                   <Video className="w-12 h-12 mb-4 opacity-20" />
-                  <p>No recent meetings</p>
+                  <p className="mb-4">No recent meetings yet.</p>
+                  <button
+                    onClick={handleCreateMeeting}
+                    className="px-6 py-2.5 bg-primary/20 text-primary-light hover:bg-primary/30 rounded-lg transition-colors font-medium text-sm border border-primary/30"
+                  >
+                    Create a Meeting
+                  </button>
                 </div>
               )}
             </div>

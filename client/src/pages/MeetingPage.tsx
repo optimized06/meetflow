@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PreJoinScreen } from '../components/PreJoinScreen';
@@ -8,6 +8,7 @@ import { ControlsBar } from '../components/ControlsBar';
 import { ChatPanel } from '../components/ChatPanel';
 import { ParticipantsPanel } from '../components/ParticipantsPanel';
 import { useWebRTC } from '../hooks/useWebRTC';
+import { toast } from 'sonner';
 import type { ChatMessage } from '../types';
 
 type MeetingState = 'lobby' | 'in-call';
@@ -29,6 +30,11 @@ const MeetingPage: React.FC = () => {
   const [isHandRaised, setIsHandRaised] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
 
+  const isChatOpenRef = useRef(isChatOpen);
+  useEffect(() => {
+    isChatOpenRef.current = isChatOpen;
+  }, [isChatOpen]);
+
   const {
     participants,
     localPeerId,
@@ -44,6 +50,7 @@ const MeetingPage: React.FC = () => {
     mutePeer,
     kickPeer,
     promotePeer,
+    demotePeer,
     updateRoomSettings,
     startScreenShare,
     stopScreenShare,
@@ -66,14 +73,32 @@ const MeetingPage: React.FC = () => {
     return unsub;
   }, [meetingState, on]);
 
-  // Handle incoming chat messages
+  // Handle incoming chat messages - decoupled from isChatOpen to avoid duplicate listeners on re-render
   useEffect(() => {
     if (meetingState !== 'in-call') return;
     const unsub = on<ChatMessage>('chat-message', (msg) => {
-      setMessages((prev) => [...prev, msg]);
+      // If broadcast message is from local user, it's already added optimistically
+      if (msg.userId === localPeerId && msg.type !== 'system') {
+        return;
+      }
+
+      setMessages((prev) => {
+        // Prevent duplicate insertions
+        if (prev.some((m) => m.id === msg.id)) {
+          return prev;
+        }
+        return [...prev, msg];
+      });
+      
+      // Show toast if chat is closed and it's not a system message
+      if (!isChatOpenRef.current && msg.type !== 'system') {
+        toast.message(`Message from ${msg.userName}`, {
+          description: msg.content.length > 50 ? msg.content.substring(0, 50) + '...' : msg.content,
+        });
+      }
     });
     return unsub;
-  }, [meetingState, on]);
+  }, [meetingState, on, localPeerId]);
 
   const handleJoin = useCallback((name: string, stream: MediaStream | null) => {
     setDisplayName(name);
@@ -84,7 +109,25 @@ const MeetingPage: React.FC = () => {
     setMicOn(hasAudio);
     setVideoOn(hasVideo);
     setMeetingState('in-call');
-  }, []);
+
+    // Record join in history
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+      const mockUser = localStorage.getItem('mock_user');
+      const userId = mockUser ? JSON.parse(mockUser).id : '';
+      
+      fetch(`${apiUrl}/api/meetings/${roomId}/join`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-mock-user-id': userId
+        },
+        body: JSON.stringify({ title: `Room ${roomId}` }) // Fallback title
+      });
+    } catch (e) {
+      console.error('Failed to record meeting join', e);
+    }
+  }, [roomId]);
 
   const handleLeave = useCallback(() => {
     if (localStream) {
@@ -233,6 +276,7 @@ const MeetingPage: React.FC = () => {
                 isScreenSharing={isScreenSharing}
                 connectionQuality={isConnected ? 'good' : 'poor'}
                 isLocal={true}
+                participantAvatar={localStorage.getItem('user_avatar') || undefined}
               />
               
               {/* Remote Participants */}
@@ -248,6 +292,7 @@ const MeetingPage: React.FC = () => {
                   isScreenSharing={p.isScreenSharing}
                   connectionQuality={p.connectionQuality}
                   isLocal={false}
+                  participantAvatar={p.avatarUrl}
                 />
               ))}
             </VideoGrid>
@@ -277,6 +322,7 @@ const MeetingPage: React.FC = () => {
             onMutePeer={mutePeer}
             onKickPeer={kickPeer}
             onPromotePeer={promotePeer}
+            onDemotePeer={demotePeer}
             onUpdateRoomSettings={updateRoomSettings}
           />
         </div>

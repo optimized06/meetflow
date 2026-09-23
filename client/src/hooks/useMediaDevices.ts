@@ -18,6 +18,8 @@ export interface UseMediaDevicesReturn {
   audioDevices: MediaDeviceInfo[];
   videoDevices: MediaDeviceInfo[];
   mediaState: MediaState;
+  micDenied: boolean;
+  cameraDenied: boolean;
   permissionError: string | null;
   errorCode: 'NotAllowedError' | 'NotFoundError' | 'NotReadableError' | 'UnknownError' | null;
   isLoading: boolean;
@@ -35,6 +37,8 @@ export function useMediaDevices(): UseMediaDevicesReturn {
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
   const [permissionError, setPermissionError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<'NotAllowedError' | 'NotFoundError' | 'NotReadableError' | 'UnknownError' | null>(null);
+  const [micDenied, setMicDenied] = useState(false);
+  const [cameraDenied, setCameraDenied] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [mediaState, setMediaState] = useState<MediaState>({
     isMicOn: true,
@@ -133,7 +137,17 @@ export function useMediaDevices(): UseMediaDevicesReturn {
     } catch (err: any) {
       const message = err instanceof Error ? err.message : 'Failed to start media devices';
       setPermissionError(message);
-      setErrorCode(err.code || 'UnknownError');
+      const code = err.code as string | undefined;
+      setErrorCode(code as any);
+      // Set denial flags based on specific error codes
+      if (code === 'NotAllowedError') {
+        // Distinguish which permission was denied by checking which devices were requested
+        // If both audio and video were requested, we assume both denied when no tracks returned
+        const hasAudio = !!err?.constraints?.audio;
+        const hasVideo = !!err?.constraints?.video;
+        if (hasAudio) setMicDenied(true);
+        if (hasVideo) setCameraDenied(true);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -243,6 +257,8 @@ export function useMediaDevices(): UseMediaDevicesReturn {
     audioDevices,
     videoDevices,
     mediaState,
+    micDenied,
+    cameraDenied,
     permissionError,
     errorCode,
     isLoading,

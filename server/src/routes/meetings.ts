@@ -9,6 +9,15 @@ const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
 // In-memory mock storage
 const mockMeetings = new Map<string, any>();
 
+interface UserMeeting {
+  userId: string;
+  roomId: string;
+  title: string;
+  lastJoinedAt: string;
+  createdAt: string;
+}
+const mockUserMeetings = new Map<string, UserMeeting>(); // key: `${userId}-${roomId}`
+
 router.use(authenticate);
 
 // POST /api/meetings
@@ -46,6 +55,14 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       });
     } else {
       mockMeetings.set(roomId, meetingData);
+      const userId = req.user?.id || 'mock-user-id';
+      mockUserMeetings.set(`${userId}-${roomId}`, {
+        userId,
+        roomId,
+        title: meetingData.title,
+        lastJoinedAt: meetingData.created_at,
+        createdAt: meetingData.created_at
+      });
       return res.status(201).json({
         id: meetingData.id,
         roomId: meetingData.room_id,
@@ -116,7 +133,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       if (error) {
         return res.status(500).json({ error: 'Failed to fetch meetings' });
       }
-      return res.json(data.map(m => ({
+      return res.json(data.map((m: any) => ({
         id: m.id,
         roomId: m.room_id,
         title: m.title,
@@ -124,17 +141,59 @@ router.get('/', async (req: AuthRequest, res: Response) => {
         meetingLink: m.meeting_link
       })));
     } else {
-      const userMeetings = Array.from(mockMeetings.values()).filter(m => m.user_id === userId);
-      return res.json(userMeetings.map(m => ({
-        id: m.id,
-        roomId: m.room_id,
-        title: m.title,
-        createdAt: m.created_at,
-        meetingLink: m.meeting_link
-      })));
+      const userHistory = Array.from(mockUserMeetings.values())
+        .filter(m => m.userId === userId)
+        .sort((a, b) => new Date(b.lastJoinedAt).getTime() - new Date(a.lastJoinedAt).getTime());
+
+      return res.json(userHistory.map(h => {
+        const globalMeeting = mockMeetings.get(h.roomId);
+        return {
+          id: globalMeeting?.id || h.roomId,
+          roomId: h.roomId,
+          title: h.title,
+          createdAt: globalMeeting?.created_at || h.createdAt,
+          lastJoinedAt: h.lastJoinedAt,
+          meetingLink: globalMeeting?.meeting_link || `${clientUrl}/meeting/${h.roomId}`,
+          status: 'ended' // Mock status
+        };
+      }));
     }
   } catch (error) {
     console.error('Error in GET /api/meetings:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/meetings/:roomId/join
+router.post('/:roomId/join', async (req: AuthRequest, res: Response) => {
+  try {
+    const { roomId } = req.params;
+    const { title } = req.body;
+    const userId = req.user?.id || 'mock-user-id';
+
+    if (supabase) {
+      // Basic fallback if Supabase is used (assuming a user_meetings table exists)
+      const { error } = await supabase
+        .from('user_meetings')
+        .upsert({ user_id: userId, room_id: roomId, last_joined_at: new Date().toISOString() }, { onConflict: 'user_id,room_id' });
+      if (error) console.warn('Supabase user_meetings insert failed, ignoring for mock fallback.', error.message);
+      return res.status(200).json({ success: true });
+    } else {
+      const globalMeeting = mockMeetings.get(roomId);
+      const existing = mockUserMeetings.get(`${userId}-${roomId}`);
+      
+      mockUserMeetings.set(`${userId}-${roomId}`, {
+        userId,
+        roomId,
+        title: globalMeeting?.title || title || existing?.title || 'Meeting',
+        lastJoinedAt: new Date().toISOString(),
+        createdAt: existing?.createdAt || globalMeeting?.created_at || new Date().toISOString()
+      });
+      
+      return res.status(200).json({ success: true });
+    }
+  } catch (error) {
+    console.error('Error in POST /api/meetings/:roomId/join:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

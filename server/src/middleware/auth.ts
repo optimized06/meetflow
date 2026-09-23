@@ -8,7 +8,8 @@ export interface AuthRequest extends Request {
 export const authenticate = async (req: AuthRequest, res: Response, next: NextFunction) => {
   if (!supabase) {
     // Mock mode, allow all
-    req.user = { id: 'mock-user-id', email: 'mock@example.com' };
+    const mockUserId = req.headers['x-mock-user-id'] as string;
+    req.user = { id: mockUserId || 'mock-user-id', email: 'mock@example.com' };
     return next();
   }
 

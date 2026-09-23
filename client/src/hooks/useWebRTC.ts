@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useSocket } from './useSocket';
 import type { RoomSettings } from '../types';
+import { toast } from 'sonner';
 
 const ICE_SERVERS: RTCConfiguration = {
   iceServers: [
@@ -12,6 +13,7 @@ const ICE_SERVERS: RTCConfiguration = {
 export interface Participant {
   peerId: string;
   displayName: string;
+  avatarUrl?: string;
   stream: MediaStream | null;
   isMicOn: boolean;
   isCameraOn: boolean;
@@ -196,10 +198,12 @@ export function useWebRTC({
     if (!enabled || !isConnected || joinedRef.current) return;
     
     joinedRef.current = true;
+    const userAvatar = localStorage.getItem('user_avatar') || undefined;
     emit('join-room', {
       roomId,
       peerId: localPeerIdRef.current,
       displayName,
+      avatarUrl: userAvatar,
       isMicOn,
       isCameraOn,
     });
@@ -234,6 +238,7 @@ export function useWebRTC({
           updated.set(p.peerId, {
             peerId: p.peerId,
             displayName: p.displayName,
+            avatarUrl: p.avatarUrl,
             stream: null,
             isMicOn: p.isMicOn,
             isCameraOn: p.isCameraOn,
@@ -253,11 +258,13 @@ export function useWebRTC({
     // New peer joined
     const unsub2 = on<any>('peer-joined', (participant) => {
       console.log('[WebRTC] Peer joined:', participant.displayName);
+      toast.success(`${participant.displayName} joined the meeting`);
       setParticipants((prev) => {
         const updated = new Map(prev);
         updated.set(participant.peerId, {
           peerId: participant.peerId,
           displayName: participant.displayName,
+          avatarUrl: participant.avatarUrl,
           stream: null,
           isMicOn: participant.isMicOn,
           isCameraOn: participant.isCameraOn,
@@ -320,15 +327,20 @@ export function useWebRTC({
       const { peerId } = data;
       console.log('[WebRTC] Peer left:', peerId);
       const pc = peerConnectionsRef.current.get(peerId);
-      if (pc) {
-        pc.close();
-        peerConnectionsRef.current.delete(peerId);
-      }
+      
       setParticipants((prev) => {
+        const p = prev.get(peerId);
+        if (p) toast.info(`${p.displayName} left the meeting`);
+        
         const updated = new Map(prev);
         updated.delete(peerId);
         return updated;
       });
+      
+      if (pc) {
+        pc.close();
+        peerConnectionsRef.current.delete(peerId);
+      }
     });
 
     // Media state changes from peers
@@ -406,31 +418,11 @@ export function useWebRTC({
       setNetworkStatus('connected');
     });
 
-    const unsubKicked = on<void>('kicked', () => {
-      alert("You have been removed from the meeting by the host.");
-      window.location.href = '/dashboard';
-    });
-
-    const unsubRoleChanged = on<{ peerId: string; role: 'host' | 'co-host' | 'participant' }>('role-changed', (data) => {
-      if (data.peerId === localPeerIdRef.current) {
-        setLocalRole(data.role);
-      } else {
-        setParticipants((prev) => {
-          const updated = new Map(prev);
-          const existing = updated.get(data.peerId);
-          if (existing) {
-            updated.set(data.peerId, { ...existing, role: data.role });
-          }
-          return updated;
-        });
-      }
-    });
-
     return () => {
       unsub1(); unsub2(); unsub3(); unsub4();
       unsub5(); unsub6(); unsub7(); unsub8();
       unsub9(); unsub10(); unsub11(); unsub12();
-      unsubDisconnect(); unsubConnect(); unsubKicked(); unsubRoleChanged();
+      unsubDisconnect(); unsubConnect();
     };
   }, [enabled, isConnected, createOffer, createPeerConnection, emit, on, localStream]);
 
@@ -475,6 +467,10 @@ export function useWebRTC({
 
   const promotePeer = useCallback((peerId: string) => {
     emit('make-cohost', { targetPeerId: peerId });
+  }, [emit]);
+
+  const demotePeer = useCallback((peerId: string) => {
+    emit('demote-cohost', { targetPeerId: peerId });
   }, [emit]);
 
   const updateRoomSettings = useCallback((settings: Partial<RoomSettings>) => {
@@ -672,6 +668,7 @@ export function useWebRTC({
     mutePeer,
     kickPeer,
     promotePeer,
+    demotePeer,
     updateRoomSettings,
     startScreenShare,
     stopScreenShare,

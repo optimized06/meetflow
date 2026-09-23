@@ -100,13 +100,18 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               </div>
             ) : (
               messages.map((msg) => {
-                // System message
+                // System message / activity event
                 if (msg.type === 'system') {
                   return (
-                    <div key={msg.id} className="flex justify-center my-2">
-                      <span className="bg-white/5 px-3 py-1 rounded-full text-xs text-slate-400 italic">
-                        {msg.content}
-                      </span>
+                    <div key={msg.id} className="flex justify-center my-2.5 px-2">
+                      <div className="flex items-center gap-2 bg-white/[0.04] border border-white/[0.08] px-3.5 py-1.5 rounded-full shadow-sm backdrop-blur-md max-w-full">
+                        <span className="text-xs text-slate-300 font-medium tracking-wide break-words">
+                          {msg.content}
+                        </span>
+                        <span className="text-[10px] text-slate-500 whitespace-nowrap">
+                          {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
                     </div>
                   );
                 }
@@ -127,10 +132,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                       </span>
                     </div>
                     <div
-                      className={`max-w-[85%] rounded-2xl px-4 py-2 text-sm text-white shadow-sm overflow-hidden ${
+                      className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm shadow-sm overflow-hidden ${
                         isLocal
-                          ? 'bg-primary rounded-tr-sm'
-                          : 'bg-surface-lighter rounded-tl-sm border border-white/5'
+                          ? 'bg-gradient-to-br from-violet-600 to-purple-700 text-white rounded-tr-sm'
+                          : 'bg-slate-800 text-slate-100 rounded-tl-sm border border-white/[0.08]'
                       }`}
                     >
                       {msg.type === 'file' ? (
@@ -229,7 +234,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                 <button
                   type="submit"
                   disabled={!inputText.trim()}
-                  className="p-2.5 rounded-full bg-primary hover:bg-primary-light text-white disabled:bg-surface-lighter disabled:text-white/30 transition-colors"
+                  className="p-2.5 rounded-full bg-violet-600 hover:bg-violet-500 text-white disabled:bg-slate-800 disabled:text-white/30 transition-colors"
                 >
                   <Send className="w-4 h-4" />
                 </button>

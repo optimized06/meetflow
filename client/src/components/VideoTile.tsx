@@ -12,6 +12,7 @@ export interface VideoTileProps {
   isScreenSharing: boolean;
   connectionQuality: 'good' | 'fair' | 'poor' | 'unknown';
   isLocal: boolean;
+  participantAvatar?: string;
   className?: string;
 }
 
@@ -25,6 +26,7 @@ export const VideoTile: React.FC<VideoTileProps> = ({
   isScreenSharing,
   connectionQuality,
   isLocal,
+  participantAvatar,
   className = '',
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -84,14 +86,24 @@ export const VideoTile: React.FC<VideoTileProps> = ({
           muted={isLocal}
           className={`w-full h-full object-cover ${isLocal && !isScreenSharing ? 'scale-x-[-1]' : ''}`}
         />
+      ) : stream && isScreenSharing ? (
+        <div className="flex items-center justify-center w-full h-full bg-surface">
+          <MonitorUp className="w-16 h-16 text-slate-500 opacity-50" />
+        </div>
       ) : (
-        <div className="flex items-center justify-center w-24 h-24 rounded-full bg-gradient-primary text-white text-4xl font-bold shadow-lg">
-          {getInitials(displayName)}
+        <div className="flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-full overflow-hidden border-2 border-white/10 shadow-lg bg-surface">
+          {participantAvatar ? (
+            <img src={participantAvatar} alt={displayName} className="w-full h-full object-cover" />
+          ) : (
+            <div className="flex items-center justify-center w-full h-full bg-gradient-primary text-white text-2xl sm:text-3xl md:text-4xl font-bold">
+              {getInitials(displayName)}
+            </div>
+          )}
         </div>
       )}
 
       {/* Overlays */}
-      <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-3">
+      <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-1.5 sm:p-2 md:p-3">
         {/* Top Row: Hand Raised & Connection */}
         <div className="flex justify-between items-start w-full">
           <AnimatePresence>
@@ -127,7 +139,7 @@ export const VideoTile: React.FC<VideoTileProps> = ({
         <div className="flex justify-between items-end w-full">
           <div className="flex items-center gap-2 max-w-[70%]">
             <div className="flex items-center gap-2 bg-surface/80 backdrop-blur-md rounded-lg px-3 py-1.5 shadow-lg border border-white/10 truncate">
-              <span className="text-white text-sm font-medium truncate">
+              <span className="text-white text-[11px] sm:text-xs md:text-sm font-medium truncate">
                 {displayName} {isLocal && "(You)"}
               </span>
             </div>
