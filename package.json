@@ -10,6 +10,12 @@
     "install:all": "cd client && npm install && cd ../server && npm install"
   },
   "devDependencies": {
-    "concurrently": "^9.0.1"
+    "@vitejs/plugin-react": "^6.1.1",
+    "concurrently": "^9.0.1",
+    "vite": "^8.3.0"
+  },
+  "dependencies": {
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
   }
 }
